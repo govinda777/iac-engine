@@ -37,12 +37,17 @@ graph TD
 1. **O Hub (Motor Central):**
    * **Propriedade:** Equipa de Engenharia de Plataforma (*Platform Engineering*).
    * **Responsabilidade:** Contém a inteligência operacional, os fluxos reutilizáveis do GitHub Actions (*reusable workflows*), as políticas centrais de conformidade (ex: Open Policy Agent, Checkov), as versões homologadas e assinadas dos binários do Terraform/OpenTofu, e o motor de injeção de estado dinâmico.
+   * **Localização Real:** Organização `govinda777`, repositório `iac-engine`.
    * **Isolamento:** Os utilizadores finais não possuem permissões de alteração direta nos fluxos de trabalho do Hub, garantindo conformidade regulatória uniforme.
 
 2. **Os Spokes (Repositórios Clientes):**
    * **Propriedade:** Equipas de Desenvolvimento / Engenharia de Produto (*Product Teams*).
-   * **Responsabilidade:** Contêm exclusivamente arquivos declarativos minimalistas (código HCL definindo a infraestrutura pretendida) e ficheiros de configuração de variáveis.
-   * **Abstração:** Não declaram blocos de `backend`, não definem chaves de autenticação de nuvem, nem configuram passos de CI/CD. Em vez disso, chamam de forma declarativa e minimalista o fluxo reutilizável do Hub:
+   * **Responsabilidade:** Contém exclusivamente arquivos declarativos minimalistas (código HCL definindo a infraestrutura pretendida) e ficheiros de configuração de variáveis.
+   * **Abstração:** Não declaram blocos de `backend`, não definem chaves de autenticação de nuvem, nem configuram passos de CI/CD. Em vez disso, chamam de forma declarativa e minimalista o fluxo reutilizável do Hub.
+
+### Configuração de Invocação no Spoke (Referência Real)
+
+Durante a fase de desenvolvimento, testes ou para referenciar estritamente a branch funcional atual do motor, o Spoke deve invocar o workflow centralizado com a seguinte sintaxe:
 
 ```yaml
 # Example: Spoke Workflow Configuration
@@ -57,13 +62,23 @@ on:
 
 jobs:
   iac-execution:
-    uses: my-org/central-iac-hub/.github/workflows/iac-engine.yml@v2
+    uses: govinda777/iac-engine/.github/workflows/iac-engine.yml@feat/centralized-iac-engine-docs-8851655547615092863
     with:
       environment: dev
       aws_region: us-east-1
     permissions:
       id-token: write
       contents: read
+```
+
+#### Governação de Versões pós-Merge (Boas Práticas)
+Uma vez que as alterações tenham sido consolidadas e fundidas na branch principal (`main`), as equipas de produto (Spokes) **não devem** referenciar branches de desenvolvimento ou mesmo a branch `main` diretamente em produção, a fim de evitar quebras acidentais de pipeline (*pipeline drift*).
+
+A boa prática exige que os Spokes fixem a versão utilizando tags semânticas estáveis do motor de IaC:
+
+```yaml
+    # Stable Production Reference (Semantic Tagging)
+    uses: govinda777/iac-engine/.github/workflows/iac-engine.yml@v1.0.0
 ```
 
 ---
@@ -159,7 +174,7 @@ O GitHub Enterprise atua como um provedor de identidade compatível com OpenID C
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         },
         "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:my-org/spoke-*:*"
+          "token.actions.githubusercontent.com:sub": "repo:govinda777/spoke-*:*"
         }
       }
     }
@@ -178,10 +193,12 @@ A política de confiança da IAM Role de cada aplicação cliente restringe o ac
 "Condition": {
   "StringEquals": {
     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-    "token.actions.githubusercontent.com:sub": "repo:my-org/spoke-app-a:ref:refs/heads/main"
+    "token.actions.githubusercontent.com:sub": "repo:govinda777/spoke-app-a:ref:refs/heads/main"
   }
 }
 ```
+
+*(Nota: O uso de curingas como `repo:govinda777/spoke-*:*` no exemplo anterior destina-se a dar flexibilidade a uma role genérica de auditoria ou permissões restritas em lote, mas cada Spoke de Produção deve limitar rigorosamente o seu escopo à sua respetiva claim para isolamento impecável).*
 
 ### Segurança de Módulos (GIT_ASKPASS)
 
@@ -219,7 +236,7 @@ export GIT_ASKPASS="$GIT_ASKPASS_SCRIPT_PATH"
 export GIT_TERMINAL_PROMPT=0
 
 # Ensure Git uses HTTPS instead of SSH for the organization's private repositories
-git config --global url."https://x-access-token@github.com/my-org/".insteadOf "git@github.com:my-org/"
+git config --global url."https://x-access-token@github.com/govinda777/".insteadOf "git@github.com:govinda777/"
 
 # After run execution, the clean-up step inside the ephemeral runner container will remove the temporary script:
 # rm -f "$GIT_ASKPASS_SCRIPT_PATH"
@@ -242,13 +259,14 @@ terraform {
 }
 ```
 
-Durante o ciclo de inicialização no runner efémero, o Motor de IaC calcula e infere o caminho de armazenamento exclusivo do Spoke usando metadados do repositório Git (`my-org/spoke-repository-name`). O motor então injeta estes parâmetros dinamicamente no comando de inicialização via propriedades `-backend-config`:
+Durante o ciclo de inicialização no runner efémero, o Motor de IaC calcula e infere o caminho de armazenamento exclusivo do Spoke de forma totalmente dinâmica e transparente. Utilizando a variável de contexto padrão do GitHub `github.repository` (que retorna o par `organização/nome-do-repositório`, ex: `govinda777/spoke-app-a`), o motor isola cada estado logicamente no bucket central:
 
 ```bash
 # Executed by the central engine inside the ephemeral runner container
+# The state key path is dynamically constructed using github.repository context
 terraform init \
-  -backend-config="bucket=my-central-iac-states-prod" \
-  -backend-config="key=spokes/my-org/spoke-app-a/terraform.tfstate" \
+  -backend-config="bucket=govinda777-iac-states-prod" \
+  -backend-config="key=spokes/govinda777/spoke-app-a/terraform.tfstate" \
   -backend-config="region=us-east-1" \
   -backend-config="use_lockfile=true"
 ```
@@ -265,8 +283,8 @@ Esta funcionalidade elimina por completo a necessidade de manter tabelas DynamoD
 
 | Parâmetro | Tipo | Descrição | Exemplo de Runtime Injetado pelo Motor |
 | :--- | :--- | :--- | :--- |
-| `bucket` | `string` | Nome do Bucket S3 centralizado e protegido por RCPs. | `my-central-iac-states-prod` |
-| `key` | `string` | Caminho lógico seguro e isolado, derivado do nome do repositório Spoke. | `spokes/my-org/spoke-app-a/terraform.tfstate` |
+| `bucket` | `string` | Nome do S3 Bucket centralizado e protegido por RCPs. | `govinda777-iac-states-prod` |
+| `key` | `string` | Caminho lógico seguro e isolado, derivado dinamicamente do contexto `github.repository`. | `spokes/govinda777/spoke-app-a/terraform.tfstate` |
 | `region` | `string` | Região AWS de localização física do S3. | `us-east-1` |
 | `use_lockfile` | `boolean` | Ativa o bloqueio de estado nativo do S3 (Terraform 1.10+ / OpenTofu 1.8+). | `true` |
 
@@ -283,7 +301,7 @@ graph TD
     end
 
     subgraph State_Storage [S3 Centralized State]
-        Bucket[(S3 Bucket: <br> my-central-iac-states-prod)]
+        Bucket[(S3 Bucket: <br> govinda777-iac-states-prod)]
     end
 
     subgraph Operations [Operações IaC]
@@ -313,3 +331,24 @@ O motor central executa validações de segurança em linha antes de prosseguir 
 * **Validação de Código HCL (Checkov/Trivy):** Deteta configurações perigosas ou inseguras de recursos (ex: portas expostas ao público geral, discos sem cifra ativada).
 * **Políticas Regulatórias de Infraestrutura (OPA/Rego):** Garante a conformidade de nomes de recursos, conformidade com as zonas de disponibilidade aceitáveis e a presença de etiquetas (*tags*) obrigatórias que permitam a imputação correta de custos financeiros de infraestrutura.
 * **Cálculo Preventivo de Custos:** Integração opcional com calculadores de custos para exibir a diferença de custos diretos diretamente no Pull Request juntamente com as alterações lógicas.
+
+---
+
+## Alinhamento de Deteção de Drift (Desvios)
+
+Uma característica inerente ao **Paradigma 1 (Pipelines Tradicionais de CI/CD)** é que a deteção de alterações de infraestrutura efetuadas diretamente na nuvem (fora da pipeline, via consola AWS ou CLI externa) é **reativa por natureza**. O motor de IaC tradicionalmente só toma conhecimento de um desvio (*drift*) quando um novo Pull Request ou commit é executado no Spoke, disparando um planeamento.
+
+### Prática Recomendada de Governação (Cron Jobs Reativos)
+
+Para contornar este limite de reatividade e mitigar riscos de desvio persistente sem afetar o fluxo de trabalho das equipas de desenvolvimento, o Motor de IaC Centralizado recomenda a implementação de **Cron Jobs automatizados e consultivos no Hub**:
+
+```mermaid
+graph LR
+    Cron[GitHub Actions Scheduler <br> Daily/Hourly Cron] -->|Itera e Invoca| Hub[Hub: iac-engine]
+    Hub -->|AssumeRole - ReadOnly| AWS[AWS Cloud Resources]
+    Hub -->|Gera Relatório| DriftDoc[Relatório de Desvios / Alerta Slack]
+```
+
+1. **Agendador Centralizado:** O repositório central (`govinda777/iac-engine`) executa um fluxo de trabalho programado (ex: a cada 24 horas) via `schedule` do GitHub Actions.
+2. **Varredura em Lote:** O fluxo lê a lista de Spokes registados e invoca de forma assíncrona uma execução de `terraform plan -detailed-exitcode` utilizando permissões apenas de leitura (*ReadOnly*).
+3. **Alerta Proativo:** Se o Terraform/OpenTofu reportar um código de saída indicando que existem diferenças entre a configuração declarada no Spoke e o estado real da AWS, o motor publica um alerta imediato no canal do Slack da equipa proprietária e opcionalmente gera um issue automatizado no repositório do Spoke para correção.

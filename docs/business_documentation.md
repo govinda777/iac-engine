@@ -116,7 +116,7 @@ Para manter a estabilidade operacional de toda a organização, o Hub de IaC seg
 
 ### Gestão de Versões (Semantic Versioning)
 
-O repositório do Hub de IaC centralizado (`my-org/central-iac-hub`) utiliza versionamento semântico estrito (`MAJOR.MINOR.PATCH`):
+O repositório do Hub de IaC centralizado (`govinda777/iac-engine`) utiliza versionamento semântico estrito (`MAJOR.MINOR.PATCH`):
 
 * **PATCH (v2.0.1):** Correções de bugs na lógica do motor que não alteram a assinatura ou o comportamento esperado pelas aplicações Spokes (ex: melhoria de formatação de logs). O Spoke recebe esta atualização de forma transparente se estiver configurado para apontar para a versão principal (`@v2`).
 * **MINOR (v2.1.0):** Adição de funcionalidades não disruptivas (ex: introdução de um novo linter opcional na pipeline de planeamento).

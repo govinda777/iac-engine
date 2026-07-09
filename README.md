@@ -334,6 +334,15 @@ O motor central executa validações de segurança em linha antes de prosseguir 
 
 ---
 
+## Documentação Adicional do Ecossistema
+
+Para expandir o conhecimento operacional e de negócios sobre esta plataforma, consulte os documentos de referência na pasta `docs/`:
+
+* **[Documentação de Negócio, Roadmap e Release Management](docs/business_documentation.md):** Analisa o alinhamento de negócios do projeto, métricas de ROI, cronograma em Quarters e governança de releases.
+* **[Roadmap de Paradigmas de Alta Maturidade](docs/architectural_roadmap_paradigms.md):** Um guia profundo que descreve a evolução de longo prazo da organização através dos 3 paradigmas de maturidade (Pipelines Centralizadas, Orquestradores de Stacks DRY, e Control Plane Cloud-Native com Crossplane/vCluster).
+
+---
+
 ## Alinhamento de Deteção de Drift (Desvios)
 
 Uma característica inerente ao **Paradigma 1 (Pipelines Tradicionais de CI/CD)** é que a deteção de alterações de infraestrutura efetuadas diretamente na nuvem (fora da pipeline, via consola AWS ou CLI externa) é **reativa por natureza**. O motor de IaC tradicionalmente só toma conhecimento de um desvio (*drift*) quando um novo Pull Request ou commit é executado no Spoke, disparando um planeamento.

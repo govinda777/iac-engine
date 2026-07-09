@@ -234,3 +234,14 @@ Antes de um novo lançamento de versão do Hub ser disponibilizado para toda a o
 
 * **Canais de Comunicação:** Canal Slack interno dedicado (`#help-platform-engine`) e reuniões semanais de ajuda (*office hours*).
 * **Monitorização Proativa:** Toda falha técnica originada no nível do Hub (como falhas de ligação do ARC, erros internos de scripts do motor) aciona alertas prioritários para a equipa de Engenharia de Plataforma, garantindo uma intervenção proativa sem impacto nas tarefas de engenharia de produto.
+
+---
+
+## 7. Evolução para Multi-Paradigmas de Alta Maturidade
+
+Este roadmap trimestral de produto apoia e viabiliza a transição da organização através dos três principais paradigmas da engenharia de plataformas moderna:
+1. **Inversão de Controlo via Pipelines Centralizadas e Runners Efémeros** (Fase 1).
+2. **Orquestração DRY e Padronização de Stacks** (Fase 2).
+3. **Reconciliação Contínua via Control Plane Cloud-Native com Crossplane e vCluster** (Fase 3/4).
+
+Para compreender a fundo a arquitetura detalhada destes paradigmas, a estratégia de mitigação de riscos, herança semântica e auto-reparação contínua de desvios, consulte o documento de **[Roadmap de Paradigmas de Alta Maturidade](architectural_roadmap_paradigms.md)**.

@@ -249,7 +249,53 @@ Ao contrário dos paradigmas anteriores (reativos e baseados em execução de pi
 
 ---
 
-## 5. Matriz de Riscos, Governação e Plano de Mitigação
+## 5. Pipeline de Atualização da Infraestrutura da Própria Plataforma (Hub Infrastructure Pipeline)
+
+Para garantir a máxima confiabilidade operacional e evitar que o Motor de IaC Centralizado se torne ele próprio uma fonte de falhas ou vulnerabilidades de segurança, a atualização da infraestrutura que suporta o Hub (`iac-engine`) deve seguir um ciclo de vida rigoroso, isolado e baseado no princípio de **Platform-as-a-Code (PaaC)**.
+
+### O Desafio da Dependência Circular (The Bootstrap Lock)
+Se o motor centralizado (Hub) roda sob os runners efémeros (ARC) que residem no cluster EKS da plataforma, como podemos alterar ou atualizar a infraestrutura de rede (VPC), os buckets S3 de estados ou o próprio cluster EKS sem causar uma indisponibilidade catastrófica ou bloqueio circular?
+
+Para resolver este desafio, a nossa arquitetura implementa uma **Bifurcação de Pipelines de Execução**:
+
+```mermaid
+graph TD
+    subgraph Bootstrap_Management [Bootstrap & Core Management]
+        A[Platform Engineer CLI / Admin Runner] -->|Initial Bootstrap| B[Management Account Bootstrap Pipeline]
+        B -->|Deploys Core Physical Layer| C[AWS VPC, Central S3 Buckets & KMS Keys]
+    end
+
+    subgraph Hub_Self_Update [Hub Continuous Deployment Pipeline]
+        D[Platform Engineer Git Push] -->|Git Commit to iac-engine| E[Hub Platform Infrastructure CI/CD]
+        E -->|Simula em ambiente local via Floci.io| F{Testes Passam?}
+        F -->|Não| G[Rejeita PR]
+        F -->|Sim| H[Promoção para Produção]
+        H -->|Executa no Admin Workspace isolado| I[Aplica Updates: Karpenter, ARC, RCPs, Helm Stacks]
+    end
+
+    C -->|Core Network & Storage| I
+```
+
+### Arquitetura de Atualização e Promoção (SDLC da Plataforma)
+
+Toda e qualquer alteração ao nível de infraestrutura física da plataforma (localizada sob a pasta `terraform-aws-infrastructure/`) ou lógica de segurança segue o fluxo descrito a seguir:
+
+#### 1. Camada Física e Core (Fase de Bootstrap): VPC, S3 de Estados Globais e Chaves KMS
+* **Ação:** Provisionamento inicial e alterações de altíssimo risco (destrutivas ou estruturais de rede).
+* **Pipeline:** Utiliza uma pipeline isolada de administração (*Bootstrap/Management Pipeline*) localizada numa conta AWS de controle ou executada a partir de um workspace de administração seguro com credenciais elevadas de curta duração (que não dependem do cluster EKS principal para executar).
+* **Frequência:** Raramente alterada após a fundação.
+
+#### 2. Camada Lógica e Kubernetes (Fase de Atualização Contínua): Helm Releases, ARC, Karpenter e RCPs
+* **Ação:** Atualizações do Actions Runner Controller (ARC), políticas OPA, regras de Resource Control Policies (RCPs), regras de segurança de rede do Kubernetes (NetworkPolicies) ou atualização de dependências de Helm.
+* **Pipeline:** Utiliza o fluxo automatizado do repositório `govinda777/iac-engine` (`.github/workflows/hub-ci-test.yml`).
+* **Mecanismo de Promoção Seguro:**
+  1. **Testes Herméticos Locais (Fase 1B):** O PR no repositório `iac-engine` que altera a plataforma inicia o teste local emulando a infraestrutura no **Floci.io**. Se os testes de infraestrutura e aplicação passarem contra os mocks locais, o PR ganha sinal verde.
+  2. **Canary Deployment no EKS:** As atualizações do ARC e Karpenter são aplicadas primeiro num pool isolado de nós (Canary Nodes) do cluster EKS e testadas com jobs sintéticos.
+  3. **Aprovação Manual para Produção (Gatekeeper):** A promoção definitiva para o ambiente estável produtora de plataforma requer a validação de pelo menos dois engenheiros de plataforma seniores e aprovação via GitHub Environment Gates.
+
+---
+
+## 6. Matriz de Riscos, Governação e Plano de Mitigação
 
 A evolução tecnológica expõe a organização a novos desafios operacionais. A matriz abaixo detalha as salvaguardas técnicas estruturadas para blindar a nossa plataforma de infraestrutura:
 

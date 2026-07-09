@@ -1,6 +1,6 @@
-# Motor de IaC Centralizado: Documentação de Negócio, Roadmap e Release Management
+# Motor de IaC Centralizado: Documentação de Negócio, Roadmap e Release Management (V2)
 
-Esta documentação detalha a visão estratégica, os benefícios de negócio, o retorno de investimento (ROI), o plano de evolução técnica (Roadmap) e o modelo de governança de lançamentos (Release Management) do **Motor de IaC Centralizado**.
+Esta documentação detalha a visão estratégica, os benefícios de negócio, o retorno de investimento (ROI), o plano de evolução técnica expandido (Roadmap), a arquitetura física do repositório Hub, e o modelo de governança de lançamentos (Release Management) do **Motor de IaC Centralizado**.
 
 ---
 
@@ -59,58 +59,149 @@ Com base em métricas reais de engenharia de plataforma para uma organização c
 
 ---
 
-## 3. Roadmap Evolutivo do Produto
+## 3. Roadmap Evolutivo do Produto (Expandido)
 
-O desenvolvimento do Motor de IaC Centralizado segue uma estratégia de adoção faseada por trimestre (Quarter), garantindo valor imediato enquanto consolida capacidades avançadas de Engenharia de Plataforma.
+Para mitigar riscos de quebras em ambientes produtivos, o ciclo de vida do motor adota uma abordagem rígida de "Shift-Left" através de emulação hermética local de nuvem e isolamento rigoroso na criação física dos recursos de suporte.
 
 ```mermaid
 gantt
-    title Roadmap do Motor de IaC Centralizado (2025)
+    title Roadmap Expandido do Motor de IaC Centralizado (2025-2026)
     dateFormat  YYYY-MM-DD
-    section Fase 1: Fundação
-    Keyless OIDC & S3 Native Locking  :active, des1, 2025-01-01, 2025-03-31
-    Onboarding dos Primeiros 10 Spokes :active, des2, 2025-02-15, 2025-03-31
-    section Fase 2: Governação
-    Políticas OPA integradas no PR      : des3, 2025-04-01, 2025-06-30
-    Mecanismo GIT_ASKPASS nativo       : des4, 2025-04-15, 2025-05-31
-    section Fase 3: Escala
-    Auto-Onboarding via Portal de Developer : des5, 2025-07-01, 2025-09-30
-    Suporte Multi-Cloud Avançado       : des6, 2025-08-01, 2025-10-31
-    section Fase 4: Inteligência
-    Análise Preditiva de Custos IA     : des7, 2025-10-01, 2025-12-31
+    section Fase 1A: Fundação Core
+    OIDC Keyless & S3 Native Locking  :active, f1a, 2025-01-01, 2025-02-15
+    section Fase 1B: Emulação & Sandbox
+    Stack Floci.io (AWS Local Mock)   :active, f1b, 2025-02-16, 2025-03-31
+    Pipeline de Teste Integrado (CI)  :active, f1c, 2025-03-01, 2025-03-31
+    section Fase 2A: Infra Estrutural AWS
+    Provisionamento da Infra de Produção AWS : des1, 2025-04-01, 2025-05-15
+    Security Perimeter (RCPs & OIDC) : des2, 2025-05-01, 2025-06-15
+    section Fase 2B: Governação
+    Políticas OPA integradas no PR      : des3, 2025-06-16, 2025-07-31
+    Mecanismo GIT_ASKPASS nativo       : des4, 2025-07-01, 2025-08-15
+    section Fase 3: Escala & Self-Service
+    Auto-Onboarding via Backstage     : des5, 2025-08-16, 2025-11-30
+    section Fase 4: Inteligência & FinOps
+    Análise Preditiva & IA             : des6, 2025-12-01, 2026-03-31
 ```
 
-### Q1: Fundação & Eficiência de Core
-* **Foco:** Implementação do modelo básico Hub-and-Spoke.
-* **Marcos:**
-  * Desenvolvimento do Workflow Reutilizável do GitHub Actions com injeção automática de estado dinâmico.
-  * Implementação de autenticação **OIDC Keyless** com filtragem estrita baseada em claims de repositórios.
-  * Integração nativa do **S3 Native Locking** utilizando OpenTofu 1.8+ / Terraform 1.10+, eliminando dependências de DynamoDB.
-  * Piloto com as primeiras 10 aplicações (Spokes).
+### Detalhamento Técnico das Fases
 
-### Q2: Governação, Compliance & Segurança Avançada
-* **Foco:** Proteção contra ameaças modernas de cadeia de suprimentos (*Supply Chain Security*) e imposição de padrões organizacionais.
-* **Marcos:**
-  * Implementação do mecanismo **GIT_ASKPASS** em memória para consumo seguro de módulos privados via HTTPS sem chaves SSH estáticas ou conhecidas.
-  * Integração de análise estática preventiva de segurança diretamente no Pull Request (ex: Trivy/Checkov).
-  * Lançamento de Resource Control Policies (RCPs) organizacionais na AWS para limitar o acesso aos buckets de estado do S3 exclusivamente através dos runners autorizados.
+#### Fase 1A: Fundação Core & Abstração (Q1 - Início)
+* **Objetivo:** Estabelecer a infraestrutura fundamental de controle lógico do motor de IaC.
+* **Escopo:**
+  * Criação dos fluxos reutilizáveis do GitHub Actions (`.github/workflows/iac-engine.yml`).
+  * Desenvolvimento do mecanismo de injeção dinâmica de estado via propriedades `-backend-config` baseando-se no metadado `github.repository`.
 
-### Q3: Escala Corporativa & Self-Service
-* **Foco:** Democratização do uso e simplificação de processos.
-* **Marcos:**
-  * Integração com Backstage ou portais internos de programadores (IDPs) para criação de novos Spokes através de um clique (*Backstage Software Templates*).
-  * Auto-onboarding com provisionamento automatizado das IAM Roles de confiança correspondentes de forma segura.
-  * Migração de 100% dos Spokes organizacionais para o Motor Centralizado.
+#### Fase 1B: Emulação de Nuvem & Sandbox Cliente (Q1 - Final)
+* **Objetivo:** Criar um ambiente de testes hermético ("Shift-Left") dentro do próprio repositório Hub para simular e validar a execução de um Spoke sem dependência de nuvem pública e com custo zero.
+* **Mecanismo de Teste:** Integração da stack **Floci.io** (Firecracker Lightweight Orchestration) na pipeline de CI do Hub (`hub-ci-test.yml`). O Floci.io orquestra microVMs ultraleves executando APIs efémeras compatíveis com os serviços AWS (como S3 e IAM).
+* **Validação do Motor:** A pipeline executa um ciclo de "teste em caixa-preta" (*black-box testing*) chamando o workflow reutilizável contra a pasta de exemplo de simulação `examples/mock-spoke-app/` para garantir que alterações lógicas do motor não introduzam regressões funcionais.
 
-### Q4: Otimização Financeira & Inteligência
-* **Foco:** FinOps avançado e auditoria preditiva.
-* **Marcos:**
-  * Injeção automática de análise preditiva de custos (Infracost) no PR.
-  * Auditoria automática de recursos órfãos com alertas de inatividade automáticos direcionados aos Spokes proprietários.
+#### Fase 2A: Provisionamento de Infraestrutura Corporativa AWS (Q2 - Início)
+* **Objetivo:** Subir e estabilizar a fundação física real da plataforma nas contas corporativas da AWS.
+* **Componentes Entregues:**
+  * **Clusters AWS EKS:** Provisionamento e configuração da infraestrutura de computação de Kubernetes dedicada para hospedar o Actions Runner Controller (ARC).
+  * **Armazenamento Seguro de Estados:** Criação física dos buckets S3 corporativos de alta consistência protegidos por chaves geridas via AWS KMS.
+  * **Arquitetura de Rede Protegida:** VPCs isoladas, Endpoints de VPC privados para o S3 (evitando tráfego de dados sensíveis pela rede pública) e NAT Gateways dedicados para a saída de internet controlada dos Runners Efémeros.
+
+#### Fase 2B: Segurança Avançada, Perímetros & Governação (Q2 - Final)
+* **Objetivo:** Proteção intransigente da cadeia de suprimentos de software (*software supply chain security*) e isolamento lógico de dados.
+* **Componentes Entregues:**
+  * Implementação definitiva de Resource Control Policies (RCPs) organizacionais de S3 para travar e restringir acessos a partir de IPs externos aos runners autorizados.
+  * Ativação global do mecanismo `GIT_ASKPASS` seguro em memória nos runners para consumo de módulos privados.
+  * Verificações estáticas em linha automáticas de segurança (Checkov/Trivy) e conformidade corporativa (OPA/Rego) diretamente acopladas ao motor de PR.
+
+#### Fase 3: Escala & Self-Service (Q3 - Completo)
+* **Objetivo:** Democratizar o consumo da plataforma de forma automatizada e escalável.
+* **Componentes Entregues:**
+  * Integração com portal interno de desenvolvedores (IDP) como o Spotify Backstage via Software Templates corporativos pré-aprovados.
+  * Onboarding self-service de novas equipas (Spokes), criando as IAM Roles federadas necessárias com políticas de confiança isoladas de forma automática.
+
+#### Fase 4: Inteligência & FinOps (Q4 / 2026 - Início)
+* **Objetivo:** Auditoria proativa e eficiência financeira inteligente de recursos.
+* **Componentes Entregues:**
+  * Estimativas financeiras em tempo de execução integradas no PR (Infracost).
+  * Monitorização preditiva de recursos não utilizados (recursos órfãos) com disparos de alertas de encerramento automáticos.
 
 ---
 
-## 4. Release Management & Ciclo de Vida do Software (SDLC)
+## 4. Estrutura Física Proposta para o Repositório Hub
+
+Para acomodar nativamente os códigos de infraestrutura física, simulação local via Floci.io e testes automatizados, o repositório `iac-engine` é estruturado conforme o seguinte layout de pastas:
+
+```text
+iac-engine/ (Repositório Hub Central)
+├── .github/
+│   └── workflows/
+│       ├── iac-engine.yml        # O workflow reutilizável principal (produção)
+│       └── hub-ci-test.yml       # Pipeline de CI do próprio HUB (Fase 1B)
+├── examples/
+│   └── mock-spoke-app/           # PASTA SIMULADORA DO CLIENTE (SPOKE)
+│       ├── .github/workflows/
+│       │   └── local-deploy.yml  # Invoca o workflow central apontando para o mock
+│       ├── backend.tf            # Bloco S3 vazio como exige o paradigma
+│       ├── main.tf               # Declaração minimalista de recursos (ex: S3, EC2)
+│       └── terraform.tfvars      # Variáveis específicas do mock cliente
+├── test-infrastructure/          # Ferramentas e stacks focadas em simulação local
+│   ├── floci/
+│   │   ├── floci-compose.yml     # Orquestração do Floci.io para emular a API AWS
+│   │   └── scripts/
+│   │       └── init-aws-mocks.sh # Pré-cria o bucket de estado simulado no Floci
+│   └── local-backend.tfvars      # Injetado no init local para desviar para o Floci
+├── terraform-aws-infrastructure/ # Código IaC que provisiona a infra REAL da AWS (Fase 2A)
+│   ├── eks-arc-cluster/          # Código para subir o cluster Kubernetes dos Runners
+│   └── central-s3-backend/       # Código que cria os buckets de estado reais e RCPs
+├── policies/                     # Guardrails de governança (OPA / Checkov)
+└── scripts/
+    └── setup_git_auth.sh         # Script efémero do GIT_ASKPASS
+```
+
+---
+
+## 5. Arquitetura da Pipeline de Teste e Entrega (Fase 1B)
+
+O ciclo de vida da pipeline de integração contínua do próprio Hub (`hub-ci-test.yml`) atua como o principal portão de qualidade (*quality gate*) impedindo que modificações quebrem a compatibilidade com os Spokes clientes existentes.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GitHub as GitHub Actions CI
+    participant Floci as Floci.io Engine
+    participant Motor as Workflow Reutilizável
+    participant MockSpoke as Exemplos/Mock-Spoke
+
+    GitHub->>Floci: Inicializa MicroVMs / Mocks da API AWS
+    Floci-->>GitHub: Endpoints locais prontos (http://localhost:4566)
+    GitHub->>MockSpoke: Inicia execução de teste simulando o cliente
+    MockSpoke->>Motor: Invoca iac-engine.yml com parâmetros de Teste
+    Motor->>Floci: Executa 'terraform init/plan' direcionado ao endpoint emulado
+    Floci-->>Motor: Valida sintaxe, consistência do S3 Native Locking local
+    Motor->>GitHub: Retorna Sucesso (Código Verificado)
+    GitHub->>Floci: Destrói ambiente de emulação
+```
+
+### Detalhe do Fluxo Hermético de CI
+
+1. **Setup do Ambiente Local:** A pipeline de CI do Hub (`hub-ci-test.yml`) inicializa o ambiente subindo o container do **Floci.io** configurado no ficheiro `floci-compose.yml`. O script `init-aws-mocks.sh` é chamado para inicializar o bucket fictício `govinda777-iac-states-mock` e as identidades OIDC locais.
+2. **Injeção de Backend Redirecionada:** O motor central identifica que está a correr sob uma bateria de testes locais e, em vez de contactar os endpoints globais da AWS, injeta os parâmetros de backend redirecionando-os para o host local do Floci.io:
+
+```bash
+# Executed in-memory by the engine during the local emulation stage
+terraform init \
+  -backend-config="bucket=govinda777-iac-states-mock" \
+  -backend-config="key=spokes/govinda777/mock-spoke-app/terraform.tfstate" \
+  -backend-config="region=us-east-1" \
+  -backend-config="use_lockfile=true" \
+  -backend-config="endpoint=http://localhost:4566" \
+  -backend-config="skip_metadata_api_check=true" \
+  -backend-config="skip_credentials_validation=true"
+```
+
+3. **Validação Caixa-Preta (Shift-Left):** O plano e a aplicação de testes rodam de forma completa contra a API mockada do S3 do Floci.io. Qualquer erro de concorrência ou problema na escrita e lock de ficheiro de estado é imediatamente alertado e o build falha. Isso garante resiliência e estabilidade absoluta antes de qualquer deploy em produção real AWS.
+
+---
+
+## 6. Release Management & Ciclo de Vida do Software (SDLC)
 
 Para manter a estabilidade operacional de toda a organização, o Hub de IaC segue regras estritas de versionamento e testes automáticos de compatibilidade, agindo como qualquer biblioteca ou produto crítico de software.
 

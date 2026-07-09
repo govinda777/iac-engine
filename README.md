@@ -339,6 +339,7 @@ O motor central executa validações de segurança em linha antes de prosseguir 
 Para expandir o conhecimento operacional e de negócios sobre esta plataforma, consulte os documentos de referência na pasta `docs/`:
 
 * **[Documentação de Negócio, Roadmap e Release Management](docs/business_documentation.md):** Analisa o alinhamento de negócios do projeto, métricas de ROI, cronograma em Quarters e governança de releases.
+* **[Especificação Técnica do Motor Serverless Nativo](docs/serverless_native_iac_engine.md):** Uma especificação profunda da arquitetura do Motor de IaC Centralizado rodando 100% de forma nativa e efémera dentro da plataforma de CI/CD (sem computação própria na AWS e sem DynamoDB para locks).
 * **[Roadmap de Paradigmas de Alta Maturidade](docs/architectural_roadmap_paradigms.md):** Um guia profundo que descreve a evolução de longo prazo da organização através dos 3 paradigmas de maturidade (Pipelines Centralizadas, Orquestradores de Stacks DRY, e Control Plane Cloud-Native com Crossplane/vCluster).
 
 ---

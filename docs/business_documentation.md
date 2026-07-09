@@ -244,4 +244,6 @@ Este roadmap trimestral de produto apoia e viabiliza a transição da organizaç
 2. **Orquestração DRY e Padronização de Stacks** (Fase 2).
 3. **Reconciliação Contínua via Control Plane Cloud-Native com Crossplane e vCluster** (Fase 3/4).
 
-Para compreender a fundo a arquitetura detalhada destes paradigmas, a estratégia de mitigação de riscos, herança semântica e auto-reparação contínua de desvios, consulte o documento de **[Roadmap de Paradigmas de Alta Maturidade](architectural_roadmap_paradigms.md)**.
+Para compreender a arquitetura e especificações técnicas de cada modelo, consulte:
+* **[Especificação Técnica do Motor Serverless Nativo](serverless_native_iac_engine.md):** Um detalhamento exaustivo sobre a execução 100% efémera e sem computação instalada na AWS para a Fase 1.
+* **[Roadmap de Paradigmas de Alta Maturidade](architectural_roadmap_paradigms.md):** Um guia profundo que descreve a evolução de longo prazo da organização através dos 3 paradigmas de maturidade, com análises de mitigação de riscos de infraestrutura real e controle de concorrência.

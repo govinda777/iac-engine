@@ -1,0 +1,76 @@
+# File: govinda777/iac-engine/.github/workflows/iac-engine-reusable.yml
+name: Centralized IaC Engine Reusable Core
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "The target execution environment (e.g., dev, staging, prod)"
+        required: true
+        type: string
+      aws_region:
+        description: "The AWS target region for infrastructure provisioning"
+        required: false
+        type: string
+        default: "us-east-1"
+      state_bucket:
+        description: "The centralized S3 bucket name where terraform states are stored"
+        required: true
+        type: string
+      iam_role_arn:
+        description: "The specific AWS IAM OIDC Role ARN to assume for this Spoke"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  iac-pipeline:
+    name: Ephemeral IaC Execution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Spoke Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC Keyless)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.iam_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+          audience: sts.amazonaws.com
+
+      - name: Setup OpenTofu / Terraform
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.8.8"
+
+      - name: Dynamic Backend Injection & Initialization
+        env:
+          STATE_BUCKET: ${{ inputs.state_bucket }}
+          AWS_REGION: ${{ inputs.aws_region }}
+          # github.repository returns 'owner/repo_name' which ensures perfect logical state isolation
+          REPO_PATH: ${{ github.repository }}
+        run: |
+          echo "Initializing backend dynamically for: ${REPO_PATH}"
+          tofu init \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=clientes/${REPO_PATH}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="use_lockfile=true"
+
+      - name: Validate IaC Configurations
+        run: tofu validate
+
+      - name: Execute Plan Preview (Pull Request)
+        id: plan
+        if: github.event_name == 'pull_request'
+        run: |
+          tofu plan -no-color -out=tfplan > plan_output.log
+          cat plan_output.log
+
+      - name: Execute Apply Deploy (Merge / Push)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: tofu apply -auto-approve

@@ -2,6 +2,8 @@
 
 Este repositório centralizado (`govinda777/iac-engine`) atua como o **Hub de Engenharia de Plataforma** da nossa organização, gerenciando as execuções de Infraestrutura como Código (IaC) de todos os repositórios clientes organizacionais (**Spokes**).
 
+A **iac-engine** posiciona-se como um **gatekeeper de segurança de alta governança** e um **gestor de ciclo de vida ponta a ponta**. O cliente fornece a sua identidade via OIDC, e a engine valida a conformidade e executa o provisionamento de forma 100% transparente e efémera.
+
 A arquitetura baseia-se no **Paradigma de Inversão de Controlo via Pipelines Centralizadas e Runners Efémeros**. Sob uma premissa estritamente *serverless* e efémera, **não mantemos nenhuma infraestrutura ou computação gerenciada ativa por nós na AWS** (sem clusters EKS dedicados, sem instâncias EC2 persistentes, sem Lambdas e sem bases de dados DynamoDB).
 
 ```mermaid
@@ -33,17 +35,22 @@ iac-engine/ (Repositório Hub Central)
 ├── .github/
 │   └── workflows/
 │       ├── iac-engine-reusable.yml  # O workflow reutilizável principal (produção)
-│       └── iac-engine.yml           # Workflow geral de desenvolvimento
 ├── docs/                            # Documentação aprofundada da plataforma
+│   ├── adr/
+│   │   └── 002_inversion_of_control_lifecycle.md # Inversão de Controle do Ciclo de Vida (ADR-002)
+│   ├── templates/
+│   │   ├── adr_template.md          # Template para novas ADRs
+│   │   └── rfc_template.md          # Template para novas RFCs de Segurança/Ciclo de Vida
+│   ├── README.md                    # Posicionamento global e guia da pasta docs
 │   ├── architectural_roadmap_paradigms.md # Roadmap evolutivo multi-paradigmas (vCluster/Crossplane)
-│   ├── business_documentation.md         # Alinhamento executivo, ROI e roadmap trimestral
-│   └── serverless_native_iac_engine.md   # Especificação detalhada do motor efémero nativo
-├── examples/
-│   └── mock-spoke-app/              # Sandbox e exemplos de simulação para novos clientes
-│       ├── backend.tf               # Bloco s3 vazio herdeiro do paradigma
-│       └── main.tf                  # Código de teste minimalista
+│   ├── authentication_onboarding.md # Onboarding de Autenticação OIDC e Trust Policies
+│   ├── business_documentation.md     # Alinhamento executivo, ROI e roadmap trimestral
+│   ├── lifecycle_management.md      # Gerenciamento automático de ciclo de vida (Git Event -> Engine)
+│   ├── security_gateways.md         # Gateways de Segurança, OPA e Resource Control Policies (RCPs)
+│   └── serverless_native_iac_engine.md # Especificação detalhada do motor efémero nativo
 ├── scripts/
-│   └── setup_git_auth.sh            # Script efémero de autenticação GIT_ASKPASS em memória
+│   └── lint_security.py             # Script automatizado de lint de segurança e backend-less
+├── Makefile                         # Comandos rápidos de governança local (make lint-security)
 └── README.md                        # Esta documentação técnica global do Hub
 ```
 
@@ -93,7 +100,7 @@ jobs:
 
 ---
 
-## Modelo de Segurança (OIDC & Multi-Tenancy)
+## Modelo de Segurança e Governança (OIDC & Multi-Tenancy)
 
 O nosso modelo de governança multi-inquilino (*multi-tenancy*) garante isolamento total entre os Spokes clientes, prevenindo incidentes de segurança cibernética e acesso não autorizado entre ambientes.
 
@@ -114,7 +121,7 @@ sequenceDiagram
 ```
 
 ### 1. OpenID Connect (OIDC) Keyless
-Eliminamos 100% o uso de chaves e credenciais de nuvem estáticas no GitHub Actions. A autenticação baseia-se em criptografia assimétrica de curta duração. O GitHub Actions emite um token assinado digitalmente que o AWS STS valida em milissegundos para liberar permissões efémeras em memória.
+Eliminamos 100% o uso de chaves e credenciais de nuvem estáticas no GitHub Actions. A autenticação baseia-se em criptografia assimétrica de curta duração. O GitHub Actions emite um token assinado digitalmente que o AWS STS valida em milissegundos para liberar permissões efémeras em memória. Saiba mais em [Onboarding de Autenticação](docs/authentication_onboarding.md).
 
 ### 2. Filtragem Estrita por Inquilino (sub claim)
 As IAM Roles criadas nas contas da AWS contêm políticas de confiança (*Trust Policies*) extremamente rígidas que barram acessos cruzados. Uma requisição oriunda do repositório `spoke-app-b` é automaticamente rejeitada se tentar assumir a role de acesso do `spoke-app-a`:
@@ -148,13 +155,13 @@ As IAM Roles criadas nas contas da AWS contêm políticas de confiança (*Trust 
 A integridade dos ficheiros de estado da infraestrutura é mantida de forma isolada, resiliente e económica.
 
 ### Injeção Dinâmica de Estados
-Durante o ciclo de execução no runner efémero, o workflow reutilizável do Hub lê a variável especial de contexto `${{ github.repository }}` (que retorna por exemplo `govinda777/spoke-app-a`) e injeta-a diretamente nas propriedades `-backend-config` durante o comando de inicialização, blindando o Spoke contra erros manuais ou falhas de configuração:
+Durante o ciclo de execução no runner efémero, o workflow reutilizável do Hub lê a variável especial de contexto `${{ github.repository }}` (que retorna por exemplo `govinda777/spoke-app-a`) e injeta-a diretamente nas propriedades `-backend-config` durante o comando de inicialização, blindando o Spoke contra erros manuais ou falhas de configuração. Veja os detalhes em [Gestão de Ciclo de Vida](docs/lifecycle_management.md).
 
 ```bash
 # Executed in-memory by the Hub Reusable Workflow
 tofu init \
   -backend-config="bucket=govinda777-iac-states-prod" \
-  -backend-config="key=clientes/govinda777/spoke-app-a/terraform.tfstate" \
+  -backend-config="key=clientes/${REPO_PATH}/terraform.tfstate" \
   -backend-config="region=us-east-1" \
   -backend-config="use_lockfile=true"
 ```
@@ -166,10 +173,29 @@ Este novo paradigma técnico elimina por completo a necessidade histórica de ma
 
 ---
 
+## Validação de Segurança Pré-Envio (make lint-security)
+
+Para mitigar erros e chaves estáticas antes do envio do código, disponibilizamos um comando de validação local no `Makefile`:
+
+```bash
+make lint-security
+```
+
+Este comando verifica se o seu código contém possíveis chaves estáticas vazadas da AWS e se todos os blocos de backend do Terraform estão em conformidade com o formato vazio exigido pela engine central. Veja mais detalhes em [Gateways de Segurança](docs/security_gateways.md).
+
+---
+
 ## Documentação Adicional do Ecossistema
 
 Para expandir o conhecimento operacional e de negócios sobre esta plataforma, consulte os documentos de referência na pasta `docs/`:
 
+* **[Guia Técnico Global (README docs)](docs/README.md):** Visão unificada da pasta docs e detalhamento dos pilares lógicos do gatekeeper.
+* **[Onboarding de Autenticação OIDC](docs/authentication_onboarding.md):** Como configurar as IAM Roles federadas com Trust Policies rígidas.
+* **[Gateways de Segurança](docs/security_gateways.md):** Verificações SAST de segredos, validações de conformidade OPA e perímetros de dados via Resource Control Policies (RCPs).
+* **[Gestão de Ciclo de Vida Automático](docs/lifecycle_management.md):** Detalhes da Inversão de Controle onde a engine diferencia automaticamente 'Preview' de 'Deploy'.
+* **[Template de RFC de Segurança](docs/templates/rfc_template.md):** Modelo de Request For Comments para novas propostas de segurança/ciclo de vida.
+* **[Template de ADR](docs/templates/adr_template.md):** Modelo para registro de decisões arquiteturais.
+* **[ADR-002: Inversão de Controle do Ciclo de Vida](docs/adr/002_inversion_of_control_lifecycle.md):** Decisão de delegar à engine (Hub) quando planejar ou aplicar com base em eventos do Git.
 * **[Documentação de Negócio, Roadmap e Release Management](docs/business_documentation.md):** Analisa o alinhamento de negócios do projeto, métricas de ROI, cronograma em Quarters e governança de releases.
 * **[Especificação Técnica do Motor Serverless Nativo](docs/serverless_native_iac_engine.md):** Uma especificação profunda da arquitetura do Motor de IaC Centralizado rodando 100% de forma nativa e efémera dentro da plataforma de CI/CD (sem computação própria na AWS e sem DynamoDB para locks).
 * **[Roadmap de Paradigmas de Alta Maturidade](docs/architectural_roadmap_paradigms.md):** Um guia profundo que descreve a evolução de longo prazo da organização através dos 3 paradigmas de maturidade (Pipelines Centralizadas, Orquestradores de Stacks DRY, e Control Plane Cloud-Native com Crossplane/vCluster).

@@ -45,15 +45,14 @@ def check_file_for_credentials(filepath):
         print_warning(f"Could not read {filepath}: {e}")
     return not has_issues
 
-# 2. Check that the backend "s3" configuration is completely empty
-# It should strictly be terraform { backend "s3" {} } without parameters inside the braces.
+# 2. Check that the backend "s3" configuration is properly decentralized
+# It must contain use_lockfile = true to use S3 Native Locking.
 BACKEND_BLOCK_RE = re.compile(r'backend\s+"s3"\s*\{([^}]*)\}')
 
-def check_backend_less(filepath):
+def check_decentralized_backend(filepath):
     """
-    Ensures that any backend "s3" declaration in a .tf file is completely empty,
-    i.e., backend "s3" {}
-    Returns True if valid (either no S3 backend or empty S3 backend), False if invalid.
+    Ensures that any backend "s3" declaration in a .tf file contains use_lockfile = true.
+    Returns True if valid (either no S3 backend or valid S3 backend), False if invalid.
     """
     try:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -61,15 +60,17 @@ def check_backend_less(filepath):
 
         matches = BACKEND_BLOCK_RE.findall(content)
         for match in matches:
-            # Strip comments and whitespaces inside the block
-            clean_block = re.sub(r'#.*|//.*|/\*.*?\*/', '', match, flags=re.DOTALL).strip()
-            if clean_block:
-                print_error(f"Non-empty S3 backend block found in {filepath}:")
-                print_error(f"Found content: {clean_block}")
-                print_error("Under the central Hub engine paradigm, Spokes must use an empty S3 backend block: backend \"s3\" {}")
+            # Strip comments and whitespaces to check for use_lockfile
+            clean_block = re.sub(r'#.*|//.*|/\*.*?\*/', '', match, flags=re.DOTALL)
+
+            # Simple check for use_lockfile = true
+            if not re.search(r'use_lockfile\s*=\s*true', clean_block, re.IGNORECASE):
+                print_error(f"Invalid S3 backend block found in {filepath}:")
+                print_error(f"Found content: {match.strip()}")
+                print_error("Under the decentralized engine paradigm, Spokes must declare their own S3 backend and include 'use_lockfile = true'.")
                 return False
     except Exception as e:
-        print_warning(f"Could not check backend-less status for {filepath}: {e}")
+        print_warning(f"Could not check decentralized backend status for {filepath}: {e}")
     return True
 
 def run_lint_security(directory="."):
@@ -99,13 +100,13 @@ def run_lint_security(directory="."):
         if not check_file_for_credentials(filepath):
             success = False
 
-        # Check backend-less configuration for .tf files
+        # Check decentralized backend configuration for .tf files
         if filepath.endswith(".tf"):
-            if not check_backend_less(filepath):
+            if not check_decentralized_backend(filepath):
                 success = False
 
     if success:
-        print_success("All files passed the security lint validation! No hardcoded keys found and S3 backends are backend-less (empty).")
+        print_success("All files passed the security lint validation! No hardcoded keys found and S3 backends are properly decentralized (with use_lockfile=true).")
     else:
         print_error("Security lint validation failed! Please fix the errors listed above before committing.")
 

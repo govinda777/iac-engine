@@ -13,14 +13,20 @@ on:
         required: false
         type: string
         default: "us-east-1"
-      state_bucket:
-        description: "The centralized S3 bucket name where terraform states are stored"
-        required: true
-        type: string
       iam_role_arn:
         description: "The specific AWS IAM OIDC Role ARN to assume for this Spoke"
         required: true
         type: string
+      working_directory:
+        description: "The working directory for the infrastructure code"
+        required: false
+        type: string
+        default: "."
+      framework:
+        description: "The framework to use (e.g. tofu, terraform)"
+        required: false
+        type: string
+        default: "tofu"
 
 permissions:
   id-token: write
@@ -47,30 +53,28 @@ jobs:
         with:
           tofu_version: "1.8.8"
 
-      - name: Dynamic Backend Injection & Initialization
-        env:
-          STATE_BUCKET: ${{ inputs.state_bucket }}
-          AWS_REGION: ${{ inputs.aws_region }}
-          # github.repository returns 'owner/repo_name' which ensures perfect logical state isolation
-          REPO_PATH: ${{ github.repository }}
+      - name: Validate Security Requirements
+        run: python3 scripts/lint_security.py ${{ inputs.working_directory }}
+
+      - name: Decentralized Backend Initialization
+        working-directory: ${{ inputs.working_directory }}
         run: |
-          echo "Initializing backend dynamically for: ${REPO_PATH}"
-          tofu init \
-            -backend-config="bucket=${STATE_BUCKET}" \
-            -backend-config="key=clientes/${REPO_PATH}/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="use_lockfile=true"
+          echo "Initializing decentralized backend..."
+          ${{ inputs.framework }} init
 
       - name: Validate IaC Configurations
-        run: tofu validate
+        working-directory: ${{ inputs.working_directory }}
+        run: ${{ inputs.framework }} validate
 
       - name: Execute Plan Preview (Pull Request)
         id: plan
         if: github.event_name == 'pull_request'
+        working-directory: ${{ inputs.working_directory }}
         run: |
-          tofu plan -no-color -out=tfplan > plan_output.log
+          ${{ inputs.framework }} plan -no-color -out=tfplan > plan_output.log
           cat plan_output.log
 
       - name: Execute Apply Deploy (Merge / Push)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: tofu apply -auto-approve
+        working-directory: ${{ inputs.working_directory }}
+        run: ${{ inputs.framework }} apply -auto-approve
